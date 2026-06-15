@@ -4,9 +4,9 @@
 
 import time
 
-import board
+import board # type: ignore
 
-import adafruit_dht 
+import adafruit_dht  # type: ignore
 
 dhtDevice = adafruit_dht.DHT11(board.D4)
 
