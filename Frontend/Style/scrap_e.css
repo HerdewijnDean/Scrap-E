@@ -1,0 +1,448 @@
+/* ====================================
+   Font
+==================================== */
+@font-face {
+    font-family: "Future Earth";
+    src: url("./future-earth.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+}
+
+/* ====================================
+   Variables
+==================================== */
+:root {
+    --color-yellow: #f6b11a;
+    --color-red: #DB182E;
+    --color-dark-gray: #333333;
+    --color-blue: #35538B;
+    --color-white: #ffffff;
+}
+
+/* ---------- Reset / base ---------- */
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    min-height: 100%;
+    margin: 0;
+}
+
+body {
+    background-color: var(--color-yellow);
+    color: var(--color-dark-gray);
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ====================================
+   Header
+==================================== */
+.header {
+    display: grid;
+    grid-template-columns: 3.5rem 1fr 3.5rem;
+    align-items: center;
+
+    min-height: 4.5rem;
+    padding: 0 1rem;
+
+    background-color: var(--color-dark-gray);
+}
+
+.logo {
+    margin: 0;
+
+    color: var(--color-white);
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 2.4rem;
+    font-weight: normal;
+    line-height: 1;
+
+    text-align: center;
+    letter-spacing: 0.08em;
+}
+
+/* Fucking dumb but funny lines go brrrrrrr */
+.menu-button {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.35rem;
+
+    width: 3rem;
+    height: 3rem;
+    padding: 0;
+
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.menu-button__line {
+    display: block;
+
+    width: 2rem;
+    height: 0.22rem;
+
+    background-color: var(--color-white);
+    border-radius: 999px;
+}
+
+.header-spacer {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* ====================================
+   Main
+==================================== */
+.main {
+    padding: 1.25rem;
+}
+
+.hero {
+    padding: 1.25rem;
+
+    background-color: rgba(255, 255, 255, 0.35);
+    border: 3px solid var(--color-dark-gray);
+    border-radius: 1rem;
+}
+
+.hero__title {
+    margin: 0 0 0.5rem;
+
+    font-size: 1.5rem;
+}
+
+.hero__text {
+    margin: 0;
+
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+
+/* ====================================
+   Battery Card
+==================================== */
+.battery-card {
+    margin-top: 1.25rem;
+    padding: 1rem;
+
+    background-color: var(--color-white);
+    border: 3px solid var(--color-dark-gray);
+    border-radius: 1rem;
+}
+
+.battery-card__title {
+    margin: 0 0 1.5rem;
+
+    color: var(--color-dark-gray);
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1.6rem;
+    font-weight: normal;
+    letter-spacing: 0.06em;
+}
+
+.battery-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+}
+
+.battery-unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.battery-unit__title {
+    margin: 0 0 0.6rem;
+
+    color: var(--color-dark-gray);
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1.2rem;
+    font-weight: normal;
+    letter-spacing: 0.06em;
+}
+
+.battery-display {
+    display: grid;
+    grid-template-rows: repeat(9, 1fr) 2fr;
+    gap: 0.35rem;
+
+    width: 8rem;
+    height: 16rem;
+    padding: 0.5rem;
+
+    background-color: #111111;
+    border-radius: 0.6rem;
+}
+
+.battery-segment {
+    background-color: #202020;
+}
+
+.battery-segment--active {
+    background-color: #ffff45;
+}
+
+.battery-segment--danger {
+    background-color: var(--color-red);
+}
+
+.battery-voltage {
+    margin: 1rem 0 0;
+
+    color: var(--color-dark-gray);
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1.5rem;
+    font-weight: normal;
+}
+
+/* ====================================
+   Hamburger Menu
+==================================== */
+.mobile-menu {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 1000;
+
+    width: 100%;
+    max-width: 20rem;
+    height: 100vh;
+
+    background-color: var(--color-white);
+
+    transform: translateX(100%);
+    transition: transform 0.25s ease-in-out;
+}
+
+.mobile-menu--open {
+    transform: translateX(0);
+}
+
+.mobile-menu-top {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+
+    min-height: 4.5rem;
+    padding: 0 1rem;
+
+    background-color: var(--color-dark-gray);
+}
+
+.close-button {
+    position: relative;
+
+    width: 3rem;
+    height: 3rem;
+    padding: 0;
+
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.close-button__line {
+    position: absolute;
+    left: 0.45rem;
+    top: 1.4rem;
+
+    display: block;
+
+    width: 2.1rem;
+    height: 0.22rem;
+
+    background-color: var(--color-white);
+    border-radius: 999px;
+}
+
+.close-button__line--one {
+    transform: rotate(45deg);
+}
+
+.close-button__line--two {
+    transform: rotate(-45deg);
+}
+
+/* Menu links */
+.mobile-menu-links {
+    display: flex;
+    flex-direction: column;
+}
+
+.mobile-menu-link {
+    display: flex;
+    align-items: center;
+
+    min-height: 6.2rem;
+    padding: 0 1.8rem;
+
+    color: var(--color-dark-gray);
+    background-color: white;
+    border-bottom: 1px solid #aaaaaa;
+
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1.4rem;
+    text-decoration: none;
+    letter-spacing: 0.05em;
+}
+
+.mobile-menu-link:hover {
+    background-color: #eeeeee;
+}
+
+body.menu-open {
+    overflow: hidden;
+}
+
+
+/* =========================================================
+   SENSOR PAGE
+========================================================= */
+
+.sensor-card {
+    margin-top: 1.25rem;
+    padding: 1rem;
+
+    background-color: var(--color-white);
+    border: 3px solid var(--color-dark-gray);
+    border-radius: 1rem;
+}
+
+.sensor-card__title {
+    margin: 0 0 1rem;
+
+    color: var(--color-dark-gray);
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1.5rem;
+    font-weight: normal;
+    letter-spacing: 0.06em;
+}
+
+.sensor-values {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+
+    margin-bottom: 1rem;
+}
+
+.sensor-value-box {
+    padding: 1rem;
+
+    background-color: #eeeeee;
+    border: 2px solid var(--color-dark-gray);
+    border-radius: 0.75rem;
+}
+
+.sensor-value-box h3 {
+    margin: 0 0 0.5rem;
+
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1rem;
+    font-weight: normal;
+}
+
+.sensor-value-box p {
+    margin: 0;
+
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1.6rem;
+}
+
+.chart-wrapper {
+    height: 18rem;
+    padding: 0.5rem;
+
+    background-color: #eeeeee;
+    border: 2px solid var(--color-dark-gray);
+    border-radius: 0.75rem;
+}
+
+.sensor-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.sensor-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #eeeeee;
+}
+
+.sensor-table th,
+.sensor-table td {
+    padding: 0.75rem;
+    border: 1px solid #aaaaaa;
+    text-align: left;
+}
+
+.sensor-table th {
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-weight: normal;
+}
+
+
+/* ====================================
+   Good Design :) | its just for desktop
+==================================== */
+@media (min-width: 768px) {
+    .header {
+        min-height: 5.5rem;
+    }
+
+    .logo {
+        font-size: 3.8rem;
+    }
+
+    .main {
+        max-width: 70rem;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+}
+
+/* Bigger screens: show batteries next to each other */
+@media (min-width: 768px) {
+    .battery-card {
+        padding: 1.5rem;
+    }
+
+    .battery-card__title {
+        font-size: 2rem;
+    }
+
+    .battery-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .battery-display {
+        width: 9rem;
+        height: 17rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .mobile-menu-top {
+        min-height: 5.5rem;
+    }
+
+    .mobile-menu-link {
+        font-size: 1.6rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .sensor-values {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .chart-wrapper {
+        height: 24rem;
+    }
+}

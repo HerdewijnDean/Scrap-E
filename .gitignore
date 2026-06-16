@@ -1,3 +1,5 @@
 .venv/
 config.ini
 .scrap_virtual
+WallE_Website/
+test_database.py
