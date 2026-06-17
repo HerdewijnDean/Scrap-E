@@ -50,6 +50,50 @@
                 <canvas id="dht11Chart"></canvas>
             </div>
         </section>
+        <section class="sensor-card">
+            <h2 class="sensor-card__title">BATTERY VOLTAGE</h2>
+
+            <div class="chart-wrapper">
+                <canvas id="batteryChart"></canvas>
+            </div>
+        </section>
+        <section class="sensor-card">
+            <h2 class="sensor-card__title">CO2 SENSOR</h2>
+
+            <div class="co2-quality-box co2-quality-box--unknown js-co2-quality-box">
+                Waiting for CO2 data...
+            </div>
+
+            <div class="chart-wrapper">
+                <canvas id="co2Chart"></canvas>
+            </div>
+        </section>
+        <section class="sensor-card">
+            <h2 class="sensor-card__title">LIGHT SENSOR</h2>
+
+            <div class="chart-wrapper">
+                <canvas id="ldrChart"></canvas>
+            </div>
+        </section>
+        <section class="sensor-card">
+            <h2 class="sensor-card__title">GPS SENSOR</h2>
+
+            <div class="sensor-table-wrapper">
+                <table class="sensor-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Latitude</th>
+                            <th>Longitude</th>
+                        </tr>
+                    </thead>
+
+                    <tbody class="js-gps-table">
+                        <!-- JavaScript fills this -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </main>
 </body>
 

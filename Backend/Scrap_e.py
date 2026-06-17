@@ -4,6 +4,8 @@ import lgpio
 import uvicorn
 import socketio
 import board
+import time
+import serial
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query
@@ -14,6 +16,7 @@ from Repositories.DataRepository import DataRepository
 from Models.Models import DTOMeasurement, DTOActuatorAction
 
 import adafruit_dht # DHT11
+import adafruit_gps # GPS moduler
 # =========================================================
 # Logging
 # =========================================================
@@ -38,13 +41,13 @@ ENDPOINT = "/api/v1"
 # =========================================================
 # Read interval settings | Values in seconds
 # =========================================================
-MCP_READ_INTERVAL_BAT = 900
-MCP_READ_INTERVAL_LUX = 300
-GPS_READ_INTERVAL = 300
-DHT_READ_INTERVAL = 300
-CO2_READ_INTERVAL = 60
+MCP_READ_INTERVAL_BAT = 600 # every 10minutes
+MCP_READ_INTERVAL_LUX = 300 # 5 min
+GPS_READ_INTERVAL = 900 # 15 min
+DHT_READ_INTERVAL = 300 # 5 min
+CO2_READ_INTERVAL = 180 # 3 min
 
-
+gpio_handle = None
 # =========================================================
 # MCP3008 SPI settings
 # =========================================================
@@ -57,12 +60,19 @@ MCP_BAUD = 9800
 # Battery 1 is channel 0 in your Scrape.py structure.
 MCP_BAT_ONE = 0 #Wich channels are what
 MCP_BAT_TWO = 1
-MCP_LDR_ONE = 2
-MCP_LDR_TWO = 3
+MCP_LDR_ONE = 4
+MCP_LDR_TWO = 7
+
+FIXED_LDR_RESISTOR = 10000.0
+
+LDR_R_AT_10_LUX = 50000.0
+LDR_GAMMA = 0.7
 
 # Device id from the database.
 BATTERY_1_DEVICE_ID = 5
 BATTERY_2_DEVICE_ID = 6
+LDR_1_DEVICE_ID = 7
+LDR_2_DEVICE_ID = 8
 
 mcp_spi_handle = None
 
@@ -74,6 +84,23 @@ DHT_HUMIDITY_DEVICE_ID = 2
 
 dht_sensor = None
 
+# =========================================================
+# CO2 settings
+# =========================================================
+CO2_PWM = 17
+CO2_SENSOR_DEVICE_ID = 4
+
+# =========================================================
+# GPS settings
+# =========================================================
+GPS_SERIAL_PORT = "/dev/ttyAMA0"
+GPS_BAUDRATE = 9600
+
+GPS_LATITUDE_DEVICE_ID = 9
+GPS_LONGITUDE_DEVICE_ID = 10
+
+gps_uart = None
+gps_sensor = None
 # =========================================================
 # Setup & Cleanup Codes
 # =========================================================
@@ -103,6 +130,54 @@ def setup_dht11():
 
     return dht_sensor
 
+def setup_gpio():
+    global gpio_handle
+
+    if gpio_handle is None:
+        logger.info("Opening lgpio chip")
+
+        gpio_handle = lgpio.gpiochip_open(4)
+
+        lgpio.gpio_claim_input(
+            gpio_handle,
+            CO2_PWM,
+            lgpio.SET_PULL_UP
+        )
+
+        logger.info("lgpio chip opened and CO2 pin claimed")
+
+    return gpio_handle
+
+
+def setup_gps():
+    global gps_uart, gps_sensor
+
+    if gps_sensor is None:
+        logger.info("GPS setup started")
+
+        gps_uart = serial.Serial(
+            GPS_SERIAL_PORT,
+            baudrate=GPS_BAUDRATE,
+            timeout=0.1
+        )
+
+        gps_sensor = adafruit_gps.GPS(
+            gps_uart,
+            debug=False
+        )
+
+        # RMC + GGA data
+        gps_sensor.send_command(
+            b"PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
+        )
+
+        # Update every 1 second
+        gps_sensor.send_command(b"PMTK220,1000")
+
+        logger.info("GPS setup completed")
+
+    return gps_sensor
+
 def cleanup_mcp3008():
     global mcp_spi_handle
 
@@ -125,10 +200,50 @@ def cleanup_dht11():
 
         logger.info("DHT11 cleaned up")
 
+def cleanup_gpio():
+    global gpio_handle
 
+    if gpio_handle is not None:
+        logger.info("Closing lgpio chip")
+
+        lgpio.gpiochip_close(gpio_handle)
+        gpio_handle = None
+
+        logger.info("lgpio chip closed")
+
+def cleanup_gps():
+    global gps_uart, gps_sensor
+
+    if gps_uart is not None:
+        logger.info("Closing GPS serial")
+
+        gps_uart.close()
+        gps_uart = None
+        gps_sensor = None
+
+        logger.info("GPS serial closed")
 # =========================================================
 # Read Sensors
 # =========================================================
+def read_mcp3008_raw(channel):
+    if mcp_spi_handle is None:
+        setup_mcp3008()
+
+    if channel < 0 or channel > 7:
+        raise ValueError("MCP3008 channel must be between 0 and 7")
+
+    tx = [
+        0x01,
+        (0x08 | channel) << 4,
+        0x00
+    ]
+
+    count, rx = lgpio.spi_xfer(mcp_spi_handle, tx)
+
+    raw_value = ((rx[1] & 0x03) << 8) | rx[2]
+
+    return raw_value
+
 def read_mcp3008(channel):
     if mcp_spi_handle is None:
         setup_mcp3008()
@@ -145,6 +260,34 @@ def read_mcp3008(channel):
 
     return voltage
 
+def adc_to_ldr_resistance(adc_value):
+    if adc_value <= 0:
+        return None
+
+    return FIXED_LDR_RESISTOR * ((1023 / adc_value) - 1.0)
+
+
+def ldr_resistance_to_lux(ldr_resistance):
+    if ldr_resistance is None or ldr_resistance <= 0:
+        return 0
+
+    lux = 10.0 * ((LDR_R_AT_10_LUX / ldr_resistance) ** (1.0 / LDR_GAMMA))
+
+    return lux
+
+
+def adc_to_lux(adc_value):
+    resistance = adc_to_ldr_resistance(adc_value)
+    lux = ldr_resistance_to_lux(resistance)
+
+    return resistance, lux
+
+
+def read_ldr_lux(channel):
+    adc_value = read_mcp3008_raw(channel)
+    resistance, lux = adc_to_lux(adc_value)
+
+    return adc_value, resistance, lux
 
 def read_dht11():
     if dht_sensor is None:
@@ -155,12 +298,78 @@ def read_dht11():
 
     return temperature, humidity
 
+
+def wait_for_co2_level(target_level, timeout_s=3.0):
+    start_time = time.monotonic()
+
+    while time.monotonic() - start_time < timeout_s:
+        if lgpio.gpio_read(gpio_handle, CO2_PWM) == target_level:
+            return time.monotonic_ns()
+
+        time.sleep(0.0002)
+
+    raise RuntimeError(f"CO2 PWM timeout waiting for level {target_level}")
+
+
+def read_co2_ppm():
+    setup_gpio()
+
+    rising_time = wait_for_co2_level(1)
+    falling_time = wait_for_co2_level(0)
+
+    next_rising_time = wait_for_co2_level(1)
+
+    high_time_s = (falling_time - rising_time) / 1_000_000
+    low_time_s = (next_rising_time - falling_time) / 1_000_000
+    period_s = high_time_s + low_time_s
+
+    if period_s <= 1:
+        raise RuntimeError(f"CO2 bad period: {period_s:.2f} ms")
+
+    co2_ppm = 2000 * ((high_time_s - 2) / (period_s - 4))
+
+    if co2_ppm < 0:
+        co2_ppm = 0
+
+    if co2_ppm > 2100:
+        raise RuntimeError(f"CO2 PWM ppm reading: {co2_ppm}")
+    return co2_ppm
+
+def read_gps_location(timeout_s=5):
+    setup_gps()
+
+    start_time = time.monotonic()
+
+    while time.monotonic() - start_time < timeout_s:
+        gps_sensor.update() # type: ignore
+
+        if gps_sensor.has_fix: # type: ignore
+            return gps_sensor.latitude, gps_sensor.longitude # type: ignore
+
+        time.sleep(0.1)
+
+    raise RuntimeError("GPS has no fix")
+
 # =========================================================
-# Automatic battery measurement loop
+# bat measurement loop
 # =========================================================
 async def battery_measurement_loop():
     logger.info("Battery measurement loop started")
+    battery_data = {
+        "battery_1": DataRepository.read_measurements_by_device(
+            BATTERY_1_DEVICE_ID,
+            25
+        ),
+        "battery_2": DataRepository.read_measurements_by_device(
+            BATTERY_2_DEVICE_ID,
+            25
+        ),
+    }
 
+    await sio.emit(
+        "B2F_battery_data",
+        jsonable_encoder(battery_data)
+    )
     while True:
         try:
             battery_1_voltage = round(read_mcp3008(MCP_BAT_ONE),2)
@@ -203,7 +412,7 @@ async def battery_measurement_loop():
         await asyncio.sleep(MCP_READ_INTERVAL_BAT)
 
 # =========================================================
-# Automatic DHT11 measurement loop
+# DHT11 measurement loop
 # =========================================================
 async def dht11_measurement_loop():
     logger.info("DHT11 measurement loop started")
@@ -261,7 +470,158 @@ async def dht11_measurement_loop():
 
         await asyncio.sleep(DHT_READ_INTERVAL)
 
+# =========================================================
+# CO2 measurement loop
+# =========================================================
+async def co2_measurement_loop():
+    logger.info("CO2 measurement loop started")
 
+    while True:
+        try:
+            co2_ppm = await asyncio.to_thread(read_co2_ppm)
+            co2_ppm = round(float(co2_ppm), 0)
+
+            DataRepository.create_measurement(
+                device_id=CO2_SENSOR_DEVICE_ID,
+                value_number=co2_ppm,
+                value_text=None,
+                comment="Automatic CO2 PWM measurement"
+            )
+
+            co2_data = {
+                "co2": DataRepository.read_measurements_by_device(
+                    CO2_SENSOR_DEVICE_ID,
+                    30
+                )
+            }
+
+            await sio.emit(
+                "B2F_co2_data",
+                jsonable_encoder(co2_data)
+            )
+
+            logger.info(f"CO2 saved: {co2_ppm:.0f} ppm")
+
+        except RuntimeError as error:
+            logger.warning(f"CO2 read failed, trying again later: {error}")
+
+        except Exception as error:
+            logger.error(f"CO2 measurement failed: {error}")
+
+        await asyncio.sleep(CO2_READ_INTERVAL)
+
+# =========================================================
+# GPS measurement loop
+# =========================================================
+
+async def gps_measurement_loop():
+    logger.info("GPS measurement loop started")
+
+    while True:
+        try:
+            latitude, longitude = await asyncio.to_thread(read_gps_location)
+
+            latitude = round(float(latitude), 6) # type: ignore
+            longitude = round(float(longitude), 6) # type: ignore
+
+            DataRepository.create_measurement(
+                device_id=GPS_LATITUDE_DEVICE_ID,
+                value_number=latitude,
+                value_text=None,
+                comment="Automatic GPS latitude measurement"
+            )
+
+            DataRepository.create_measurement(
+                device_id=GPS_LONGITUDE_DEVICE_ID,
+                value_number=longitude,
+                value_text=None,
+                comment="Automatic GPS longitude measurement"
+            )
+
+            gps_data = {
+                "latitude": DataRepository.read_measurements_by_device(
+                    GPS_LATITUDE_DEVICE_ID,
+                    10
+                ),
+                "longitude": DataRepository.read_measurements_by_device(
+                    GPS_LONGITUDE_DEVICE_ID,
+                    10
+                ),
+            }
+
+            await sio.emit(
+                "B2F_gps_data",
+                jsonable_encoder(gps_data)
+            )
+
+            logger.info(
+                f"GPS saved | Latitude: {latitude} | Longitude: {longitude}"
+            )
+
+        except RuntimeError as error:
+            logger.warning(f"GPS read failed, trying again later: {error}")
+
+        except Exception as error:
+            logger.error(f"GPS measurement failed: {error}")
+
+        await asyncio.sleep(GPS_READ_INTERVAL)
+
+# =========================================================
+# Automatic LDR measurement loop
+# =========================================================
+
+async def ldr_measurement_loop():
+    logger.info("LDR measurement loop started")
+
+    while True:
+        try:
+            ldr_1_adc, ldr_1_resistance, ldr_1_lux = read_ldr_lux(MCP_LDR_ONE)
+            ldr_2_adc, ldr_2_resistance, ldr_2_lux = read_ldr_lux(MCP_LDR_TWO)
+
+            ldr_1_lux = round(float(ldr_1_lux), 1)
+            ldr_2_lux = round(float(ldr_2_lux), 1)
+
+            DataRepository.create_measurement(
+                device_id=LDR_1_DEVICE_ID,
+                value_number=ldr_1_lux,
+                value_text=None,
+                comment=f"Automatic LDR 1 lux measurement | ADC: {ldr_1_adc}"
+            )
+
+            DataRepository.create_measurement(
+                device_id=LDR_2_DEVICE_ID,
+                value_number=ldr_2_lux,
+                value_text=None,
+                comment=f"Automatic LDR 2 lux measurement | ADC: {ldr_2_adc}"
+            )
+
+            ldr_data = {
+                "ldr_1": DataRepository.read_measurements_by_device(
+                    LDR_1_DEVICE_ID,
+                    25
+                ),
+                "ldr_2": DataRepository.read_measurements_by_device(
+                    LDR_2_DEVICE_ID,
+                    25
+                ),
+            }
+
+            await sio.emit(
+                "B2F_ldr_data",
+                jsonable_encoder(ldr_data)
+            )
+
+            logger.info(
+                f"LDR saved | "
+                f"LDR 1: {ldr_1_lux:.1f} lux | "
+                f"LDR 2: {ldr_2_lux:.1f} lux"
+            )
+
+        except Exception as error:
+            logger.error(f"LDR measurement failed: {error}")
+
+        await asyncio.sleep(MCP_READ_INTERVAL_LUX)
+      
 # =========================================================
 # Lifespan manager
 # =========================================================
@@ -271,16 +631,30 @@ async def lifespan_manager(app: FastAPI):
 
     battery_task = None
     dht11_task = None
+    co2_task = None
+    gps_task = None
+    ldr_task = None
     
     try:
+        setup_gpio()
         setup_mcp3008()
         setup_dht11()
+        setup_gps()
         
         battery_task = asyncio.create_task(
             battery_measurement_loop()
         )
+        ldr_task = asyncio.create_task(
+            ldr_measurement_loop()
+        )
         dht11_task = asyncio.create_task(
             dht11_measurement_loop()
+        )
+        co2_task = asyncio.create_task(
+            co2_measurement_loop()
+        )
+        gps_task = asyncio.create_task(
+            gps_measurement_loop()
         )
         yield
 
@@ -302,9 +676,35 @@ async def lifespan_manager(app: FastAPI):
                 await battery_task
             except asyncio.CancelledError:
                 logger.info("Battery measurement loop stopped")
-
         cleanup_mcp3008()
+        
+        if co2_task is not None:
+            co2_task.cancel()
 
+            try:
+                await co2_task
+            except asyncio.CancelledError:
+                logger.info("CO2 measurement loop stopped")
+        
+        cleanup_gpio()
+
+        if gps_task is not None:
+            gps_task.cancel()
+
+            try:
+                await gps_task
+            except asyncio.CancelledError:
+                logger.info("GPS measurement loop stopped")
+
+        cleanup_gps()
+        if ldr_task is not None:
+            ldr_task.cancel()
+
+            try:
+                await ldr_task
+            except asyncio.CancelledError:
+                logger.info("LDR measurement loop stopped")
+        
         logger.info("Scrap-E backend stopped. Bye!")
 
 
@@ -335,7 +735,54 @@ sio = socketio.AsyncServer(
 
 sio_app = socketio.ASGIApp(sio, app)
 
-
+@app.get(ENDPOINT + "/batteries")
+async def get_battery_data(limit: int = Query(default=25, ge=1, le=100)):
+    return jsonable_encoder({
+        "battery_1": DataRepository.read_measurements_by_device(
+            BATTERY_1_DEVICE_ID,
+            limit
+        ),
+        "battery_2": DataRepository.read_measurements_by_device(
+            BATTERY_2_DEVICE_ID,
+            limit
+        ),
+    })
+    
+@app.get(ENDPOINT + "/co2")
+async def get_co2_data(limit: int = Query(default=30, ge=1, le=100)):
+    return jsonable_encoder({
+        "co2": DataRepository.read_measurements_by_device(
+            CO2_SENSOR_DEVICE_ID,
+            limit
+        )
+    })
+    
+@app.get(ENDPOINT + "/gps")
+async def get_gps_data(limit: int = Query(default=10, ge=1, le=50)):
+    return jsonable_encoder({
+        "latitude": DataRepository.read_measurements_by_device(
+            GPS_LATITUDE_DEVICE_ID,
+            limit
+        ),
+        "longitude": DataRepository.read_measurements_by_device(
+            GPS_LONGITUDE_DEVICE_ID,
+            limit
+        ),
+    })
+    
+    
+@app.get(ENDPOINT + "/ldr")
+async def get_ldr_data(limit: int = Query(default=25, ge=1, le=100)):
+    return jsonable_encoder({
+        "ldr_1": DataRepository.read_measurements_by_device(
+            LDR_1_DEVICE_ID,
+            limit
+        ),
+        "ldr_2": DataRepository.read_measurements_by_device(
+            LDR_2_DEVICE_ID,
+            limit
+        ),
+    })
 # =========================================================
 # Root
 # =========================================================

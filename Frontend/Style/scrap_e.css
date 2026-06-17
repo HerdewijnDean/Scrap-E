@@ -387,6 +387,104 @@ body.menu-open {
     font-weight: normal;
 }
 
+/* =========================================================
+   CO2 AIR QUALITY BOX
+========================================================= */
+
+.co2-quality-box {
+    margin-bottom: 1rem;
+    padding: 1rem;
+
+    border: 3px solid var(--color-dark-gray);
+    border-radius: 0.75rem;
+
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1.1rem;
+    text-align: center;
+    letter-spacing: 0.04em;
+}
+
+.co2-quality-box strong {
+    display: block;
+    margin-bottom: 0.35rem;
+}
+
+.co2-quality-box span {
+    display: block;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 1rem;
+    letter-spacing: 0;
+}
+
+/* 0 - 600 ppm */
+.co2-quality-box--great {
+    background-color: #2ecc71;
+    color: var(--color-dark-gray);
+}
+
+/* 600 - 1000 ppm */
+.co2-quality-box--good {
+    background-color: #b6d94c;
+    color: var(--color-dark-gray);
+}
+
+/* 1000 - 1400 ppm */
+.co2-quality-box--okay {
+    background-color: var(--color-yellow);
+    color: var(--color-dark-gray);
+}
+
+/* 1400 - 1800 ppm */
+.co2-quality-box--poor {
+    background-color: #f28c28;
+    color: var(--color-dark-gray);
+}
+
+/* 1800+ ppm */
+.co2-quality-box--bad {
+    background-color: var(--color-red);
+    color: var(--color-white);
+}
+
+/* No data yet */
+.co2-quality-box--unknown {
+    background-color: #eeeeee;
+    color: var(--color-dark-gray);
+}
+
+.sensor-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.sensor-table {
+    width: 100%;
+    border-collapse: collapse;
+
+    background-color: #eeeeee;
+    border: 2px solid var(--color-dark-gray);
+}
+
+.sensor-table th,
+.sensor-table td {
+    padding: 0.75rem;
+
+    border: 1px solid #aaaaaa;
+    text-align: left;
+}
+
+.sensor-table th {
+    color: var(--color-white);
+    background-color: var(--color-dark-gray);
+
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-weight: normal;
+    letter-spacing: 0.04em;
+}
+
+.sensor-table td {
+    color: var(--color-dark-gray);
+}
 
 /* ====================================
    Good Design :) | its just for desktop
