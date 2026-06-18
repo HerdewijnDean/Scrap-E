@@ -5,7 +5,7 @@
 // For now: index.html battery display
 // =========================================================
 
-const lanIP = 'http://192.168.168.169:8000';
+const lanIP = `${window.location.protocol}//${window.location.hostname}:8000`;
 const socketio = io(lanIP);
 
 const currentPage = document.body.dataset.page;
@@ -109,6 +109,36 @@ const updateBatteryVoltageText = (batteryNumber, voltage) => {
     }
 
     element.textContent = voltage.toFixed(2);
+};
+
+const postAPI = async (endpoint, bodyObject = null) => {
+    const url = `${lanIP}/api/v1${endpoint}`;
+
+    try {
+        const options = {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        };
+
+        if (bodyObject !== null) {
+            options.body = JSON.stringify(bodyObject);
+        }
+
+        const response = await fetch(url, options);
+
+        if (!response.ok) {
+            console.error(`POST failed: ${url}`);
+            return null;
+        }
+
+        return await response.json();
+
+    } catch (error) {
+        console.error('Backend connection error:', error);
+        return null;
+    }
 };
 
 // =========================================================
@@ -701,6 +731,49 @@ const loadGpsTable = async () => {
     }
 };
 
+const updateEnvironmentText = (selector, value, decimals = 1) => {
+    const element = document.querySelector(selector);
+
+    if (!element) return;
+
+    if (value === null || value === undefined || isNaN(value)) {
+        element.textContent = '--';
+        return;
+    }
+
+    element.textContent = Number(value).toFixed(decimals);
+};
+
+
+const updateHomeCo2Box = (ppm) => {
+    const qualityBox = document.querySelector('.js-home-co2-box');
+
+    if (!qualityBox) return;
+
+    const qualityInfo = getCo2QualityInfo(ppm);
+
+    qualityBox.classList.remove(
+        'co2-quality-box--unknown',
+        'co2-quality-box--great',
+        'co2-quality-box--good',
+        'co2-quality-box--okay',
+        'co2-quality-box--poor',
+        'co2-quality-box--bad'
+    );
+
+    qualityBox.classList.add(qualityInfo.className);
+
+    if (ppm === null || ppm === undefined || isNaN(ppm)) {
+        qualityBox.textContent = qualityInfo.text;
+        return;
+    }
+
+    qualityBox.innerHTML = `
+        <strong>${qualityInfo.text}</strong>
+        <span>${Number(ppm).toFixed(0)} ppm</span>
+    `;
+};
+
 // =========================================================
 // HOME PAGE RENDER
 // =========================================================
@@ -710,6 +783,13 @@ const renderHomeLatestMeasurements = (measurements) => {
 
     const latestBattery1 = measurements.find((row) => row.device_name === 'Battery 1 Voltage');
     const latestBattery2 = measurements.find((row) => row.device_name === 'Battery 2 Voltage');
+
+    const latestTemperature = measurements.find((row) => row.device_name === 'DHT11 Temperature');
+    const latestHumidity = measurements.find((row) => row.device_name === 'DHT11 Humidity');
+    const latestCo2 = measurements.find((row) => row.device_name === 'CO2 Sensor');
+
+    const latestLdrLeft = measurements.find((row) => row.device_name === 'LDR Left');
+    const latestLdrRight = measurements.find((row) => row.device_name === 'LDR Right');
 
     if (latestBattery1) {
         const voltage = Number(latestBattery1.value_number);
@@ -723,6 +803,58 @@ const renderHomeLatestMeasurements = (measurements) => {
 
         updateBatteryVoltageText(2, voltage);
         updateBatteryDisplay(2, voltage);
+    }
+
+    if (latestTemperature) {
+        updateEnvironmentText(
+            '.js-home-temperature',
+            Number(latestTemperature.value_number),
+            1
+        );
+    }
+
+    if (latestHumidity) {
+        updateEnvironmentText(
+            '.js-home-humidity',
+            Number(latestHumidity.value_number),
+            1
+        );
+    }
+
+    if (latestCo2) {
+        const co2 = Number(latestCo2.value_number);
+
+        updateEnvironmentText(
+            '.js-home-co2',
+            co2,
+            0
+        );
+
+        updateHomeCo2Box(co2);
+    }
+
+    if (latestLdrLeft && latestLdrRight) {
+        const ldrLeft = Number(latestLdrLeft.value_number);
+        const ldrRight = Number(latestLdrRight.value_number);
+        const averageLux = (ldrLeft + ldrRight) / 2;
+
+        updateEnvironmentText(
+            '.js-home-lux',
+            averageLux,
+            1
+        );
+    } else if (latestLdrLeft) {
+        updateEnvironmentText(
+            '.js-home-lux',
+            Number(latestLdrLeft.value_number),
+            1
+        );
+    } else if (latestLdrRight) {
+        updateEnvironmentText(
+            '.js-home-lux',
+            Number(latestLdrRight.value_number),
+            1
+        );
     }
 };
 
@@ -833,9 +965,51 @@ const setupMobileMenu = () => {
 };
 
 // =========================================================
-// INIT
+// ANIMATION PAGE
 // =========================================================
 
+const runAnimation = async (animationName, clickedButton) => {
+    const buttons = document.querySelectorAll('.js-animation-button');
+
+    buttons.forEach((button) => {
+        button.disabled = true;
+    });
+
+    clickedButton.classList.add('animation-button--running');
+
+    const json = await postAPI(`/animations/${animationName}`);
+
+    if (!json) {
+        console.error(`Could not start animation: ${animationName}`);
+    }
+
+    window.setTimeout(() => {
+        buttons.forEach((button) => {
+            button.disabled = false;
+            button.classList.remove('animation-button--running');
+        });
+    }, 700);
+};
+
+
+const setupAnimationButtons = () => {
+    const buttons = document.querySelectorAll('.js-animation-button');
+
+    buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const animationName = button.dataset.animation;
+
+            if (!animationName) return;
+
+            runAnimation(animationName, button);
+        });
+    });
+};
+
+
+// =========================================================
+// INIT
+// =========================================================
 const init = () => {
     console.info(`Scrap-E frontend loaded: ${currentPage}`);
 
@@ -848,6 +1022,9 @@ const init = () => {
 
     if (currentPage === 'sensors') {
         loadSensorsPage();
+    }
+    if (currentPage === 'animations') {
+        setupAnimationButtons();
     }
 };
 

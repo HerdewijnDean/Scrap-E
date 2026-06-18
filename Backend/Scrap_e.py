@@ -6,9 +6,11 @@ import socketio
 import board
 import time
 import serial
+import socket
+import subprocess
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.encoders import jsonable_encoder
 
@@ -17,6 +19,8 @@ from Models.Models import DTOMeasurement, DTOActuatorAction
 
 import adafruit_dht # DHT11
 import adafruit_gps # GPS moduler
+from PIL import Image, ImageDraw, ImageFont
+from adafruit_rgb_display import st7735
 # =========================================================
 # Logging
 # =========================================================
@@ -77,6 +81,35 @@ LDR_2_DEVICE_ID = 8
 mcp_spi_handle = None
 
 # =========================================================
+# TFT screen settings
+# =========================================================
+SCREEN_UPDATE_INTERVAL = 10
+
+TFT_SCREEN_MOSI = 27
+TFT_SCREEN_CLK = 21
+TFT_SCREEN_CE = 5
+TFT_SCREEN_RES = 24
+TFT_SCREEN_DC = 22
+
+TFT_WIDTH = 128
+TFT_HEIGHT = 160
+TFT_ROTATION = 0
+TFT_X_OFFSET = 2
+TFT_Y_OFFSET = 1
+
+BATTERY_MIN_V = 2.8
+BATTERY_MAX_V = 4.2
+BATTERY_BAR_COUNT = 10
+
+screen_spi = None
+display = None
+image = None
+draw = None
+
+cs_pin = None
+dc_pin = None
+reset_pin = None
+# =========================================================
 # DHT11 settings
 # =========================================================
 DHT_TEMPERATURE_DEVICE_ID = 1
@@ -101,10 +134,179 @@ GPS_LONGITUDE_DEVICE_ID = 10
 
 gps_uart = None
 gps_sensor = None
+
+# =========================================================
+# Servo settings
+# =========================================================
+
+SERVO_FREQUENCY = 50
+SERVO_STOP_AFTER_SECONDS = 5.0
+
+SERVO_NECK_TILT = "neck_tilt"
+SERVO_EYEBROW_RIGHT = "eyebrow_right"
+SERVO_EYEBROW_LEFT = "eyebrow_left"
+SERVO_NECK_ROTATION = "neck_rotation"
+
+SERVO_CONFIG = {
+    SERVO_NECK_TILT: {
+        "pin": 19,
+        "minimum": 1200,
+        "maximum": 1900,
+        "default": 1550,
+    },
+
+    SERVO_EYEBROW_RIGHT: {
+        "pin": 13,
+        "minimum": 700,
+        "maximum": 2200,
+        "default": 1500,
+    },
+
+    SERVO_EYEBROW_LEFT: {
+        "pin": 18,
+        "minimum": 700,
+        "maximum": 2200,
+        "default": 1500,
+    },
+
+    SERVO_NECK_ROTATION: {
+        "pin": 12,
+        "minimum": 500,
+        "maximum": 2500,
+        "default": 1550,
+    },
+}
+
+servo_animation_task = None
+servo_stop_task = None
+
 # =========================================================
 # Setup & Cleanup Codes
 # =========================================================
+class LgpioDigitalOut:
+    def __init__(self, handle, gpio, initial_value=False):
+        self.handle = handle
+        self.gpio = gpio
+        self._value = bool(initial_value)
 
+        try:
+            lgpio.gpio_claim_output(
+                self.handle,
+                self.gpio,
+                int(self._value)
+            )
+
+        except lgpio.error:
+            # If this same handle claimed it earlier, free it and try again.
+            try:
+                lgpio.gpio_free(self.handle, self.gpio)
+                time.sleep(0.01)
+
+                lgpio.gpio_claim_output(
+                    self.handle,
+                    self.gpio,
+                    int(self._value)
+                )
+
+            except lgpio.error as error:
+                raise RuntimeError(
+                    f"GPIO{self.gpio} is busy. "
+                    f"Another process may still be using it."
+                ) from error
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, new_value):
+        self._value = bool(new_value)
+        lgpio.gpio_write(
+            self.handle,
+            self.gpio,
+            int(self._value)
+        )
+
+    def switch_to_output(self, value=False, drive_mode=None):
+        self._value = bool(value)
+
+        try:
+            lgpio.gpio_claim_output(
+                self.handle,
+                self.gpio,
+                int(self._value)
+            )
+        except lgpio.error:
+            lgpio.gpio_write(
+                self.handle,
+                self.gpio,
+                int(self._value)
+            )
+
+    def deinit(self):
+        try:
+            lgpio.gpio_write(self.handle, self.gpio, 0)
+        except Exception:
+            pass
+
+
+class CustomSpiScreen:
+    def __init__(self, handle, clock_gpio, mosi_gpio):
+        self.handle = handle
+        self.clock_gpio = clock_gpio
+        self.mosi_gpio = mosi_gpio
+        self.locked = False
+        self.delay = 0.0
+
+        lgpio.gpio_claim_output(self.handle, self.clock_gpio, 0)
+        lgpio.gpio_claim_output(self.handle, self.mosi_gpio, 0)
+
+    def try_lock(self):
+        if self.locked:
+            return False
+
+        self.locked = True
+        return True
+
+    def unlock(self):
+        self.locked = False
+
+    def configure(self, baudrate=100000, polarity=0, phase=0, bits=8):
+        if polarity != 0 or phase != 0 or bits != 8:
+            raise ValueError("CustomSpiScreen only supports mode 0, 8-bit SPI")
+
+        if baudrate and baudrate < 100_000:
+            self.delay = 1.0 / (baudrate * 2.0)
+        else:
+            self.delay = 0.0
+
+    def write(self, buffer, start=0, end=None):
+        if end is None:
+            end = len(buffer)
+
+        for value in buffer[start:end]:
+            for bit in range(7, -1, -1):
+                bit_value = (value >> bit) & 1
+
+                lgpio.gpio_write(self.handle, self.mosi_gpio, bit_value)
+
+                if self.delay:
+                    time.sleep(self.delay)
+
+                lgpio.gpio_write(self.handle, self.clock_gpio, 1)
+
+                if self.delay:
+                    time.sleep(self.delay)
+
+                lgpio.gpio_write(self.handle, self.clock_gpio, 0)
+
+    def deinit(self):
+        try:
+            lgpio.gpio_write(self.handle, self.clock_gpio, 0)
+            lgpio.gpio_write(self.handle, self.mosi_gpio, 0)
+        except Exception:
+            pass
+        
 def setup_mcp3008():
     global mcp_spi_handle
 
@@ -178,6 +380,97 @@ def setup_gps():
 
     return gps_sensor
 
+def setup_screen():
+    global screen_spi, display, image, draw
+    global cs_pin, dc_pin, reset_pin
+
+    if display is not None:
+        return
+
+    setup_gpio()
+
+    logger.info("TFT screen setup started")
+
+    try:
+        screen_spi = CustomSpiScreen(
+            gpio_handle,
+            TFT_SCREEN_CLK,
+            TFT_SCREEN_MOSI
+        )
+
+        cs_pin = LgpioDigitalOut(gpio_handle, TFT_SCREEN_CE, True)
+        dc_pin = LgpioDigitalOut(gpio_handle, TFT_SCREEN_DC, False)
+        reset_pin = LgpioDigitalOut(gpio_handle, TFT_SCREEN_RES, True)
+
+        cs_pin.value = True
+
+        display = st7735.ST7735R(
+            screen_spi, # type: ignore
+            cs=cs_pin, # type: ignore
+            dc=dc_pin, # type: ignore
+            rst=reset_pin, # type: ignore
+            width=TFT_WIDTH,
+            height=TFT_HEIGHT,
+            rotation=TFT_ROTATION,
+            x_offset=TFT_X_OFFSET,
+            y_offset=TFT_Y_OFFSET,
+            bgr=True,
+        )
+
+        image = Image.new(
+            "RGB",
+            (display.width, display.height),
+            "black"
+        )
+
+        draw = ImageDraw.Draw(image)
+
+        logger.info("TFT screen setup completed")
+
+    except Exception as error:
+        logger.error(f"TFT screen setup failed: {error}")
+
+        # Very important:
+        # If setup fails halfway, release already claimed screen pins.
+        cleanup_screen()
+
+        raise
+
+
+def cleanup_screen():
+    global screen_spi, display, image, draw
+    global cs_pin, dc_pin, reset_pin
+
+    logger.info("Cleaning up TFT screen")
+
+    try:
+        set_screen_black()
+    except Exception:
+        pass
+
+    try:
+        if screen_spi is not None and hasattr(screen_spi, "deinit"):
+            screen_spi.deinit()
+    except Exception:
+        pass
+
+    for pin in (cs_pin, dc_pin, reset_pin):
+        try:
+            if pin is not None:
+                pin.deinit()
+        except Exception:
+            pass
+
+    screen_spi = None
+    display = None
+    image = None
+    draw = None
+    cs_pin = None
+    dc_pin = None
+    reset_pin = None
+
+    logger.info("TFT screen cleaned up")
+    
 def cleanup_mcp3008():
     global mcp_spi_handle
 
@@ -222,6 +515,596 @@ def cleanup_gps():
         gps_sensor = None
 
         logger.info("GPS serial closed")
+        
+# =========================================================
+# Servo animations
+# =========================================================
+
+async def animation_default():
+    await set_default_pose()
+
+
+async def animation_happy():
+    await set_default_pose()
+
+    # Head tilts slightly upward.
+    await move_servo(SERVO_NECK_TILT, 1700, 0.3)
+
+    # Eyebrows raise a little.
+    await move_servo(SERVO_EYEBROW_RIGHT, 1650, 0.2)
+    await move_servo(SERVO_EYEBROW_LEFT, 1650, 0.2)
+
+
+async def animation_sad():
+    await set_default_pose()
+
+    # Head tilts slightly downward.
+    await move_servo(SERVO_NECK_TILT, 1400, 0.3)
+
+
+async def animation_raise_eyebrows():
+    await move_servo(
+        SERVO_EYEBROW_RIGHT,
+        SERVO_CONFIG[SERVO_EYEBROW_RIGHT]["maximum"],
+        0.2
+    )
+
+    await move_servo(
+        SERVO_EYEBROW_LEFT,
+        SERVO_CONFIG[SERVO_EYEBROW_LEFT]["maximum"],
+        0.2
+    )
+
+
+async def animation_lower_eyebrows():
+    await move_servo(
+        SERVO_EYEBROW_RIGHT,
+        SERVO_CONFIG[SERVO_EYEBROW_RIGHT]["default"],
+        0.2
+    )
+
+    await move_servo(
+        SERVO_EYEBROW_LEFT,
+        SERVO_CONFIG[SERVO_EYEBROW_LEFT]["default"],
+        0.2
+    )
+
+
+async def animation_yes():
+    """
+    Head nods up and down a few times.
+    """
+
+    for _ in range(2):
+        await move_servo(SERVO_NECK_TILT, 1700, 0.35)
+        await move_servo(SERVO_NECK_TILT, 1400, 0.35)
+
+    await move_servo(
+        SERVO_NECK_TILT,
+        SERVO_CONFIG[SERVO_NECK_TILT]["default"],
+        0.2
+    )
+
+
+async def animation_no():
+    """
+    Head rotates left and right a few times.
+    """
+
+    for _ in range(3):
+        await move_servo(SERVO_NECK_ROTATION, 1350, 0.35)
+        await move_servo(SERVO_NECK_ROTATION, 1650, 0.35)
+
+    await move_servo(
+        SERVO_NECK_ROTATION,
+        SERVO_CONFIG[SERVO_NECK_ROTATION]["default"],
+        0.2
+    )
+
+
+async def animation_look_left():
+    await move_servo(SERVO_NECK_ROTATION, 1100, 0.2)
+
+
+async def animation_look_right():
+    await move_servo(SERVO_NECK_ROTATION, 1900, 0.2)
+
+async def animation_look_far_left():
+    await move_servo(
+        SERVO_NECK_ROTATION,
+        SERVO_CONFIG[SERVO_NECK_ROTATION]["minimum"],
+        0.2
+    )
+
+
+async def animation_look_far_right():
+    await move_servo(
+        SERVO_NECK_ROTATION,
+        SERVO_CONFIG[SERVO_NECK_ROTATION]["maximum"],
+        0.2
+    )
+
+# =========================================================
+# Animation controller
+# =========================================================
+
+ANIMATIONS = {
+    "default": animation_default,
+    "happy": animation_happy,
+    "sad": animation_sad,
+    "raise-eyebrows": animation_raise_eyebrows,
+    "lower-eyebrows": animation_lower_eyebrows,
+    "yes": animation_yes,
+    "no": animation_no,
+    "look-left": animation_look_left,
+    "look-right": animation_look_right,
+    "look-far-left": animation_look_far_left,
+    "look-far-right": animation_look_far_right,
+}
+
+
+async def stop_servos_after_delay():
+    await asyncio.sleep(SERVO_STOP_AFTER_SECONDS)
+    stop_all_servos()
+
+
+async def cancel_servo_tasks():
+    global servo_animation_task, servo_stop_task
+
+    for task in (servo_animation_task, servo_stop_task):
+        if task is not None and not task.done():
+            task.cancel()
+
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    servo_animation_task = None
+    servo_stop_task = None
+
+
+async def start_servo_animation(animation_name):
+    global servo_animation_task, servo_stop_task
+
+    if animation_name not in ANIMATIONS:
+        raise ValueError(f"Unknown animation: {animation_name}")
+
+    await cancel_servo_tasks()
+
+    stop_all_servos()
+
+    servo_animation_task = asyncio.create_task(
+        ANIMATIONS[animation_name]()
+    )
+
+    servo_stop_task = asyncio.create_task(
+        stop_servos_after_delay()
+    )
+
+    logger.info(f"Servo animation started: {animation_name}")
+
+# =========================================================
+# Servo helper functions
+# =========================================================
+
+def set_servo_pulse(servo_name, pulse_us):
+    setup_gpio()
+
+    servo = SERVO_CONFIG[servo_name]
+
+    pulse_us = int(
+        clamp(
+            pulse_us,
+            servo["minimum"],
+            servo["maximum"]
+        )
+    )
+
+    lgpio.tx_servo(
+        gpio_handle,
+        servo["pin"],
+        pulse_us,
+        SERVO_FREQUENCY
+    )
+
+    logger.info(
+        f"Servo moved | {servo_name} | "
+        f"GPIO {servo['pin']} | {pulse_us} us"
+    )
+
+    return pulse_us
+
+
+def stop_servo(servo_name):
+    if gpio_handle is None:
+        return
+
+    servo = SERVO_CONFIG[servo_name]
+
+    try:
+        lgpio.tx_servo(
+            gpio_handle,
+            servo["pin"],
+            0,
+            SERVO_FREQUENCY
+        )
+
+    except Exception as error:
+        logger.warning(
+            f"Could not stop servo {servo_name}: {error}"
+        )
+
+
+def stop_all_servos():
+    for servo_name in SERVO_CONFIG:
+        stop_servo(servo_name)
+
+    logger.info("All servo PWM signals stopped")
+
+
+async def move_servo(servo_name, pulse_us, wait_seconds=0.2):
+    """
+    Move one servo, then wait a short time before the next action.
+    """
+
+    set_servo_pulse(servo_name, pulse_us)
+    await asyncio.sleep(wait_seconds)
+
+
+async def set_default_pose():
+    """
+    Moves every servo back to default one by one.
+    """
+
+    await move_servo(
+        SERVO_NECK_TILT,
+        SERVO_CONFIG[SERVO_NECK_TILT]["default"]
+    )
+
+    await move_servo(
+        SERVO_EYEBROW_RIGHT,
+        SERVO_CONFIG[SERVO_EYEBROW_RIGHT]["default"]
+    )
+
+    await move_servo(
+        SERVO_EYEBROW_LEFT,
+        SERVO_CONFIG[SERVO_EYEBROW_LEFT]["default"]
+    )
+
+    await move_servo(
+        SERVO_NECK_ROTATION,
+        SERVO_CONFIG[SERVO_NECK_ROTATION]["default"]
+    )
+
+# =========================================================
+# TFT drawing helpers
+# =========================================================
+
+def load_font(path, size):
+    try:
+        return ImageFont.truetype(path, size)
+    except Exception:
+        return ImageFont.load_default()
+
+
+screen_title_font = load_font(
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    11
+)
+
+screen_small_font = load_font(
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    10
+)
+
+screen_big_font = load_font(
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    18
+)
+
+screen_warning_font = load_font(
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    14
+)
+
+screen_yellow = (246, 177, 26)
+screen_red = (219, 24, 46)
+screen_white = (255, 255, 255)
+screen_gray = (80, 80, 80)
+screen_black = (0, 0, 0)
+
+battery_start_x = 75
+battery_end_x = 128
+battery_start_y = 138
+battery_bar_height = 7
+battery_gap = 5
+
+
+def clamp(value, minimum, maximum):
+    return max(minimum, min(maximum, value))
+
+
+def voltage_to_bars(voltage):
+    voltage = clamp(voltage, BATTERY_MIN_V, BATTERY_MAX_V)
+
+    ratio = (voltage - BATTERY_MIN_V) / (BATTERY_MAX_V - BATTERY_MIN_V)
+
+    return int(round(ratio * BATTERY_BAR_COUNT))
+
+
+def draw_battery_level(amount, color):
+    amount = clamp(amount, 0, BATTERY_BAR_COUNT)
+
+    if amount <= 0:
+        draw.rectangle( # type: ignore
+            (
+                battery_start_x,
+                battery_start_y,
+                battery_end_x,
+                battery_start_y + 15
+            ),
+            fill=screen_red
+        )
+
+        draw.text( # type: ignore
+            (battery_start_x + 20, battery_start_y),
+            "LOW",
+            fill=screen_black,
+            font=screen_warning_font
+        )
+
+        return
+
+    for index in range(amount):
+        y1 = battery_start_y - index * (battery_bar_height + battery_gap)
+        y2 = y1 + battery_bar_height
+
+        draw.rectangle( # type: ignore
+            (battery_start_x, y1, battery_end_x, y2),
+            fill=color
+        )
+
+
+def update_battery_screen(title, voltage, color):
+    if display is None or draw is None or image is None:
+        return
+
+    bars = voltage_to_bars(voltage)
+
+    draw.rectangle(
+        (0, 0, display.width, display.height),
+        fill=screen_black
+    )
+
+    draw.text(
+        (4, 8),
+        title,
+        fill=color,
+        font=screen_title_font
+    )
+
+    draw.text(
+        (4, 34),
+        f"{voltage:.2f} V",
+        fill=screen_white,
+        font=screen_big_font
+    )
+
+    draw.text(
+        (4, 60),
+        f"Bars: {bars}/10",
+        fill=screen_gray,
+        font=screen_small_font
+    )
+
+    draw_battery_level(bars, color)
+
+    display.image(image)
+
+
+def set_screen_black():
+    if display is None:
+        return
+
+    try:
+        black_image = Image.new(
+            "RGB",
+            (display.width, display.height),
+            "black"
+        )
+
+        display.image(black_image)
+
+        # Give the TFT a tiny moment to actually receive the black frame.
+        time.sleep(0.2)
+
+    except Exception as error:
+        logger.warning(f"Could not set TFT to black: {error}")
+
+
+def get_latest_measurement_value(device_id):
+    rows = DataRepository.read_measurements_by_device(
+        device_id,
+        1
+    )
+
+    if rows is None or len(rows) == 0:
+        return None
+
+    return rows[0]["value_number"] # type: ignore
+
+def get_pi_ip_address():
+    """
+    Gets the current Raspberry Pi IP address.
+    First tries the active network route.
+    Then falls back to hostname -I.
+    """
+
+    try:
+        test_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        test_socket.settimeout(0.2)
+        test_socket.connect(("8.8.8.8", 80))
+
+        ip_address = test_socket.getsockname()[0]
+        test_socket.close()
+
+        if ip_address and not ip_address.startswith("127."):
+            return ip_address
+
+    except Exception:
+        pass
+
+    try:
+        output = subprocess.check_output(
+            ["hostname", "-I"],
+            text=True
+        )
+
+        ip_addresses = output.strip().split()
+
+        for ip_address in ip_addresses:
+            if not ip_address.startswith("127."):
+                return ip_address
+
+    except Exception:
+        pass
+
+    return "No IP found"
+
+def draw_centered_text(y, text, fill, font):
+    text_box = draw.textbbox((0, 0), text, font=font) # type: ignore
+    text_width = text_box[2] - text_box[0]
+
+    x = int((display.width - text_width) / 2) # type: ignore
+
+    draw.text( # type: ignore
+        (x, y),
+        text,
+        fill=fill,
+        font=font
+    )
+
+
+def update_ip_screen():
+    if display is None or draw is None or image is None:
+        return
+
+    ip_address = get_pi_ip_address()
+
+    draw.rectangle(
+        (0, 0, display.width, display.height),
+        fill=screen_black
+    )
+
+    draw_centered_text(
+        8,
+        "SCRAP-E",
+        screen_yellow,
+        screen_big_font
+    )
+
+    draw_centered_text(
+        36,
+        "IP ADDRESS",
+        screen_white,
+        screen_title_font
+    )
+
+    draw_centered_text(
+        65,
+        ip_address,
+        screen_yellow,
+        screen_title_font
+    )
+
+    draw.text(
+        (8, 100),
+        "Website:",
+        fill=screen_gray,
+        font=screen_small_font
+    )
+
+    draw.text(
+        (8, 114),
+        f"http://{ip_address}",
+        fill=screen_white,
+        font=screen_small_font
+    )
+
+    draw.text(
+        (8, 135),
+        "API port: 8000",
+        fill=screen_gray,
+        font=screen_small_font
+    )
+
+    display.image(image)
+# =========================================================
+# TFT screen loop
+# =========================================================
+
+async def screen_cycle_loop():
+    logger.info("TFT screen cycle loop started")
+
+    screen_page = 0
+
+    while True:
+        try:
+            setup_screen()
+
+            # Page 0: electronics battery
+            if screen_page == 0:
+                electronics_voltage = get_latest_measurement_value(
+                    BATTERY_1_DEVICE_ID
+                )
+
+                if electronics_voltage is not None:
+                    update_battery_screen(
+                        "ELECTRONICS",
+                        float(electronics_voltage), # type: ignore
+                        screen_yellow
+                    )
+                else:
+                    update_battery_screen(
+                        "ELECTRONICS",
+                        0.0,
+                        screen_yellow
+                    )
+
+            # Page 1: motors battery
+            elif screen_page == 1:
+                motors_voltage = get_latest_measurement_value(
+                    BATTERY_2_DEVICE_ID
+                )
+
+                if motors_voltage is not None:
+                    update_battery_screen(
+                        "MOTORS",
+                        float(motors_voltage), # type: ignore
+                        screen_red
+                    )
+                else:
+                    update_battery_screen(
+                        "MOTORS",
+                        0.0,
+                        screen_red
+                    )
+
+            # Page 2: Pi IP address
+            elif screen_page == 2:
+                update_ip_screen()
+
+            screen_page += 1
+
+            if screen_page > 2:
+                screen_page = 0
+
+        except Exception as error:
+            logger.error(f"TFT screen update failed: {error}")
+
+        await asyncio.sleep(SCREEN_UPDATE_INTERVAL)
+        
 # =========================================================
 # Read Sensors
 # =========================================================
@@ -634,12 +1517,17 @@ async def lifespan_manager(app: FastAPI):
     co2_task = None
     gps_task = None
     ldr_task = None
+    screen_task = None
     
     try:
         setup_gpio()
         setup_mcp3008()
         setup_dht11()
         setup_gps()
+        setup_screen()
+        screen_task = asyncio.create_task(
+            screen_cycle_loop()
+        )
         
         battery_task = asyncio.create_task(
             battery_measurement_loop()
@@ -660,51 +1548,58 @@ async def lifespan_manager(app: FastAPI):
 
     finally:
         logger.info("Stopping Scrap-E backend...")
+
+        await cancel_servo_tasks()
+        stop_all_servos()
+        
+        if screen_task is not None:
+            screen_task.cancel()
+            try:
+                await screen_task
+            except asyncio.CancelledError:
+                logger.info("TFT screen cycle loop stopped")
+
         if dht11_task is not None:
             dht11_task.cancel()
-
             try:
                 await dht11_task
             except asyncio.CancelledError:
                 logger.info("DHT11 measurement loop stopped")
 
-        cleanup_dht11()
         if battery_task is not None:
             battery_task.cancel()
-
             try:
                 await battery_task
             except asyncio.CancelledError:
                 logger.info("Battery measurement loop stopped")
-        cleanup_mcp3008()
-        
+
         if co2_task is not None:
             co2_task.cancel()
-
             try:
                 await co2_task
             except asyncio.CancelledError:
                 logger.info("CO2 measurement loop stopped")
-        
-        cleanup_gpio()
 
         if gps_task is not None:
             gps_task.cancel()
-
             try:
                 await gps_task
             except asyncio.CancelledError:
                 logger.info("GPS measurement loop stopped")
 
-        cleanup_gps()
         if ldr_task is not None:
             ldr_task.cancel()
-
             try:
                 await ldr_task
             except asyncio.CancelledError:
                 logger.info("LDR measurement loop stopped")
-        
+
+        cleanup_screen()
+        cleanup_dht11()
+        cleanup_mcp3008()
+        cleanup_gps()
+        cleanup_gpio()
+
         logger.info("Scrap-E backend stopped. Bye!")
 
 
@@ -783,10 +1678,45 @@ async def get_ldr_data(limit: int = Query(default=25, ge=1, le=100)):
             limit
         ),
     })
+    
+# =========================================================
+# Servo animation routes
+# =========================================================
+
+@app.get(ENDPOINT + "/animations")
+async def get_animations():
+    return {
+        "animations": list(ANIMATIONS.keys())
+    }
+
+
+@app.post(ENDPOINT + "/animations/{animation_name}")
+async def run_animation(animation_name: str):
+    if animation_name not in ANIMATIONS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown animation: {animation_name}"
+        )
+
+    await start_servo_animation(animation_name)
+
+    await sio.emit(
+        "B2F_animation_started",
+        {
+            "animation": animation_name,
+            "message": "Animation started"
+        }
+    )
+
+    return {
+        "message": "Animation started",
+        "animation": animation_name,
+        "servo_stop_after_seconds": SERVO_STOP_AFTER_SECONDS,
+    }
+    
 # =========================================================
 # Root
 # =========================================================
-
 @app.get("/")
 async def root():
     return {

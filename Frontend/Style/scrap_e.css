@@ -486,6 +486,333 @@ body.menu-open {
     color: var(--color-dark-gray);
 }
 
+/* =========================================================
+   HOME ENVIRONMENT CARD
+========================================================= */
+
+.environment-card {
+    margin-top: 1.25rem;
+    padding: 1rem;
+    background-color: var(--color-white);
+    border: 3px solid var(--color-dark-gray);
+    border-radius: 1rem;
+}
+
+.environment-card__title {
+    margin: 0 0 1rem;
+    color: var(--color-dark-gray);
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1.6rem;
+    font-weight: normal;
+    letter-spacing: 0.06em;
+}
+
+.environment-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+}
+
+.environment-tile {
+    min-height: 6rem;
+    padding: 0.8rem;
+    background-color: #eeeeee;
+    border: 2px solid var(--color-dark-gray);
+    border-radius: 0.75rem;
+}
+
+.environment-tile__label {
+    display: block;
+    margin-bottom: 0.6rem;
+    color: var(--color-dark-gray);
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+}
+
+.environment-tile__value {
+    display: block;
+    color: var(--color-dark-gray);
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1.35rem;
+    font-weight: normal;
+}
+
+.home-co2-box {
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 3px solid var(--color-dark-gray);
+    border-radius: 0.75rem;
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1.1rem;
+    text-align: center;
+    letter-spacing: 0.04em;
+}
+
+.home-co2-box strong {
+    display: block;
+    margin-bottom: 0.35rem;
+}
+
+.home-co2-box span {
+    display: block;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 1rem;
+    letter-spacing: 0;
+}
+
+.home-co2-scale {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+    margin-top: 1rem;
+}
+
+.home-co2-scale__item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 2.4rem;
+    padding: 0.45rem 0.65rem;
+    border: 2px solid var(--color-dark-gray);
+    color: var(--color-dark-gray);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 0.85rem;
+}
+
+.home-co2-scale__item strong {
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 0.8rem;
+    font-weight: normal;
+    letter-spacing: 0.04em;
+}
+
+.home-co2-scale__item--great {
+    background-color: #2ecc71;
+}
+
+.home-co2-scale__item--good {
+    background-color: #b6d94c;
+}
+
+.home-co2-scale__item--okay {
+    background-color: var(--color-yellow);
+}
+
+.home-co2-scale__item--poor {
+    background-color: #f28c28;
+}
+
+.home-co2-scale__item--bad {
+    background-color: var(--color-red);
+    color: var(--color-white);
+}
+
+@media (min-width: 768px) {
+    .environment-card {
+        padding: 1.5rem;
+    }
+
+    .environment-card__title {
+        font-size: 2rem;
+    }
+
+    .environment-tile__value {
+        font-size: 1.7rem;
+    }
+
+    .home-co2-scale {
+        grid-template-columns: repeat(5, 1fr);
+    }
+
+    .home-co2-scale__item {
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+    }
+}
+
+/* =========================================================
+   ANIMATION PAGE
+========================================================= */
+
+.animation-card {
+    margin-top: 1.25rem;
+    padding: 1rem;
+    background-color: var(--color-white);
+    border: 3px solid var(--color-dark-gray);
+    border-radius: 1rem;
+}
+
+.animation-card__title {
+    margin: 0 0 0.8rem;
+    color: var(--color-dark-gray);
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1.5rem;
+    font-weight: normal;
+    letter-spacing: 0.06em;
+}
+
+
+.animation-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.7rem;
+}
+
+.animation-button {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    padding: 0.35rem;
+    overflow: hidden;
+    background-color: var(--color-white);
+    border: 3px solid var(--color-dark-gray);
+    border-radius: 0.8rem;
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.animation-button:hover {
+    color: var(--color-white);
+    background-color: var(--color-blue);
+}
+
+.animation-button:active {
+    transform: scale(0.96);
+}
+
+.animation-button:disabled {
+    cursor: wait;
+    opacity: 0.55;
+}
+
+@media (min-width: 768px) {
+    .animation-card {
+        padding: 1.5rem;
+    }
+
+    .animation-card__title {
+        font-size: 2rem;
+    }
+
+    .animation-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .animation-button {
+        min-height: 7.5rem;
+        font-size: 1rem;
+    }
+}
+
+/* =========================================================
+   ANIMATION PAGE
+========================================================= */
+
+.animation-card {
+    margin-top: 1.25rem;
+    padding: 1rem;
+    background-color: var(--color-white);
+    border: 3px solid var(--color-dark-gray);
+    border-radius: 1rem;
+}
+
+.animation-card__title {
+    margin: 0 0 1.25rem;
+    color: var(--color-dark-gray);
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 1.5rem;
+    font-weight: normal;
+    letter-spacing: 0.06em;
+    text-align: center;
+}
+
+.animation-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem 0.65rem;
+}
+
+.animation-control {
+    min-width: 0;
+    text-align: center;
+}
+
+.animation-control__title {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    min-height: 2.4rem;
+    margin: 0 0 0.45rem;
+    color: var(--color-dark-gray);
+    font-family: "Future Earth", Arial, Helvetica, sans-serif;
+    font-size: 0.72rem;
+    font-weight: normal;
+    line-height: 1.1;
+    letter-spacing: 0.04em;
+}
+
+.animation-button {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    padding: 0;
+    overflow: hidden;
+    background-color: var(--color-yellow);
+    border: 3px solid var(--color-dark-gray);
+    border-radius: 10%;
+    cursor: pointer;
+}
+
+
+.animation-button img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background-color: var(--color-white);
+}
+
+.animation-button:hover {
+    border-color: var(--color-blue);
+    transform: scale(1.04);
+}
+
+.animation-button:active {
+    transform: scale(0.95);
+}
+
+.animation-button:disabled {
+    cursor: wait;
+    opacity: 0.55;
+}
+
+.animation-button--running {
+    border-color: var(--color-red);
+    box-shadow: 0 0 0 3px rgba(219, 24, 46, 0.3);
+}
+
+@media (min-width: 768px) {
+    .animation-card {
+        padding: 1.5rem;
+    }
+
+    .animation-card__title {
+        font-size: 2rem;
+    }
+
+    .animation-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 1.2rem 0.9rem;
+    }
+
+    .animation-control__title {
+        min-height: 2.7rem;
+        font-size: 0.85rem;
+    }
+}
+
 /* ====================================
    Good Design :) | its just for desktop
 ==================================== */

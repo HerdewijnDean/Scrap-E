@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Scrap-E Animations</title>
+
+    <link rel="stylesheet" href="./Style/scrap_e.css">
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script defer src="./Scripts/scrap_e.js"></script>
+</head>
+
+<body data-page="animations">
+
+    <header class="header">
+        <div class="header-spacer"></div>
+
+        <h1 class="logo">ANIMATIONS</h1>
+
+        <button class="menu-button js-menu-button" aria-label="Open navigation menu">
+            <span class="menu-button__line"></span>
+            <span class="menu-button__line"></span>
+            <span class="menu-button__line"></span>
+        </button>
+    </header>
+
+    <nav class="mobile-menu js-mobile-menu">
+        <div class="mobile-menu-top">
+            <button class="close-button js-menu-close" aria-label="Close navigation menu">
+                <span class="close-button__line close-button__line--one"></span>
+                <span class="close-button__line close-button__line--two"></span>
+            </button>
+        </div>
+
+        <div class="mobile-menu-links">
+            <a href="./index.html" class="mobile-menu-link">HOME</a>
+            <a href="./Sensors.html" class="mobile-menu-link">SENSOR DATA</a>
+            <a href="./animations.html" class="mobile-menu-link">ANIMATIONS</a>
+        </div>
+    </nav>
+
+    <main class="main">
+        <section class="animation-card">
+            <h2 class="animation-card__title">SCRAP-E EXPRESSIONS</h2>
+
+            <div class="animation-grid">
+
+                <article class="animation-control">
+                    <h3 class="animation-control__title">DEFAULT</h3>
+                    <button class="animation-button js-animation-button" data-animation="default" aria-label="Default pose">
+                        <img src="./Style/Fotos/Default.png" alt="">
+                    </button>
+                </article>
+
+                <article class="animation-control">
+                    <h3 class="animation-control__title">HAPPY</h3>
+                    <button class="animation-button js-animation-button" data-animation="happy" aria-label="Happy expression">
+                        <img src="./Style/Fotos/Default.png" alt="">
+                    </button>
+                </article>
+
+                <article class="animation-control">
+                    <h3 class="animation-control__title">SAD</h3>
+                    <button class="animation-button js-animation-button" data-animation="sad" aria-label="Sad expression">
+                        <img src="./Style/Fotos/Sad.png" alt="">
+                    </button>
+                </article>
+
+                <article class="animation-control">
+                    <h3 class="animation-control__title">RAISE BROWS</h3>
+                    <button class="animation-button js-animation-button" data-animation="raise-eyebrows" aria-label="Raise eyebrows">
+                        <img src="./Style/Fotos/Default.png" alt="">
+                    </button>
+                </article>
+
+                <article class="animation-control">
+                    <h3 class="animation-control__title">LOWER BROWS</h3>
+                    <button class="animation-button js-animation-button" data-animation="lower-eyebrows" aria-label="Lower eyebrows">
+                        <img src="./Style/Fotos/Default.png" alt="">
+                    </button>
+                </article>
+
+                <article class="animation-control">
+                    <h3 class="animation-control__title">YES</h3>
+                    <button class="animation-button js-animation-button" data-animation="yes" aria-label="Yes animation">
+                        <img src="./Style/Fotos/Default.png" alt="">
+                    </button>
+                </article>
+
+                <article class="animation-control">
+                    <h3 class="animation-control__title">NO</h3>
+                    <button class="animation-button js-animation-button" data-animation="no" aria-label="No animation">
+                        <img src="./Style/Fotos/Default.png" alt="">
+                    </button>
+                </article>
+
+                <article class="animation-control">
+                    <h3 class="animation-control__title">LOOK LEFT</h3>
+                    <button class="animation-button js-animation-button" data-animation="look-left" aria-label="Look left">
+                        <img src="./Style/Fotos/Look Left.png" alt="">
+                        <!-- DONE -->
+                    </button>
+                </article>
+
+                <article class="animation-control">
+                    <h3 class="animation-control__title">LOOK RIGHT</h3>
+                    <button class="animation-button js-animation-button" data-animation="look-right" aria-label="Look right">
+                        <img src="./Style/Fotos/Default.png" alt="">
+                    </button>
+                </article>
+
+                <article class="animation-control">
+                    <h3 class="animation-control__title">FAR LEFT</h3>
+                    <button class="animation-button js-animation-button" data-animation="look-far-left" aria-label="Look far left">
+                        <img src="./Style/Fotos/Default.png" alt="">
+                    </button>
+                </article>
+
+                <article class="animation-control">
+                    <h3 class="animation-control__title">FAR RIGHT</h3>
+                    <button class="animation-button js-animation-button" data-animation="look-far-right" aria-label="Look far right">
+                        <img src="./Style/Fotos/Far Right.png" alt="">
+                        <!-- DONE -->
+                    </button>
+                </article>
+
+            </div>
+        </section>
+    </main>
+
+</body>
+
+</html>

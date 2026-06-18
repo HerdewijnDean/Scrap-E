@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scrap-E</title>
+    <link rel="stylesheet" href="./Style/scrap_e.css">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script defer src="./Scripts/scrap_e.js"></script>
+</head>
+
+<body data-page="home">
+    <header class="header">
+        <div class="header-spacer"></div>
+
+        <h1 class="logo">SCRAP-E</h1>
+
+        <button class="menu-button js-menu-button" aria-label="Open navigation menu">
+            <span class="menu-button__line"></span>
+            <span class="menu-button__line"></span>
+            <span class="menu-button__line"></span>
+        </button>
+    </header>
+
+    <nav class="mobile-menu js-mobile-menu">
+        <div class="mobile-menu-top">
+            <button class="close-button js-menu-close" aria-label="Close navigation menu">
+                <span class="close-button__line close-button__line--one"></span>
+                <span class="close-button__line close-button__line--two"></span>
+            </button>
+        </div>
+
+        <div class="mobile-menu-links">
+            <a href="./index.html" class="mobile-menu-link">HOME</a>
+            <a href="./Sensors.html" class="mobile-menu-link">SENSORs</a>
+            <a href="./animations.html" class="mobile-menu-link">ANIMATIONS</a>
+        </div>
+    </nav>
+    <main class="main">
+        <section class="environment-card">
+            <h2 class="environment-card__title">ENVIRONMENT</h2>
+
+            <div class="environment-grid">
+                <article class="environment-tile">
+                    <span class="environment-tile__label">TEMPERATURE</span>
+                    <strong class="environment-tile__value">
+                        <span class="js-home-temperature">--</span> °C
+                    </strong>
+                </article>
+
+                <article class="environment-tile">
+                    <span class="environment-tile__label">HUMIDITY</span>
+                    <strong class="environment-tile__value">
+                        <span class="js-home-humidity">--</span> %
+                    </strong>
+                </article>
+
+                <article class="environment-tile">
+                    <span class="environment-tile__label">CO2</span>
+                    <strong class="environment-tile__value">
+                        <span class="js-home-co2">--</span> ppm
+                    </strong>
+                </article>
+
+                <article class="environment-tile">
+                    <span class="environment-tile__label">LUX</span>
+                    <strong class="environment-tile__value">
+                        <span class="js-home-lux">--</span>
+                    </strong>
+                </article>
+            </div>
+
+            <div class="home-co2-box co2-quality-box--unknown js-home-co2-box">
+                Waiting for CO2 data...
+            </div>
+
+            <div class="home-co2-scale">
+                <div class="home-co2-scale__item home-co2-scale__item--great">
+                    <span>0-600</span>
+                    <strong>GREAT</strong>
+                </div>
+
+                <div class="home-co2-scale__item home-co2-scale__item--good">
+                    <span>600-1000</span>
+                    <strong>GOOD</strong>
+                </div>
+
+                <div class="home-co2-scale__item home-co2-scale__item--okay">
+                    <span>1000-1400</span>
+                    <strong>OKAY</strong>
+                </div>
+
+                <div class="home-co2-scale__item home-co2-scale__item--poor">
+                    <span>1400-1800</span>
+                    <strong>POOR</strong>
+                </div>
+
+                <div class="home-co2-scale__item home-co2-scale__item--bad">
+                    <span>1800+</span>
+                    <strong>BAD</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="battery-card">
+            <h2 class="battery-card__title">BATTERY LEVEL</h2>
+
+            <div class="battery-grid">
+                <!-- Battery 1 -->
+                <article class="battery-unit">
+                    <h3 class="battery-unit__title">ELECTRONICS</h3>
+
+                    <div class="battery-display js-battery-display" data-battery="1">
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment battery-segment--large"></div>
+                    </div>
+
+                    <p class="battery-voltage">
+                        <span class="js-battery-1-voltage">--</span> V
+                    </p>
+                </article>
+
+                <!-- Battery 2 -->
+                <article class="battery-unit">
+                    <h3 class="battery-unit__title">MOTORS</h3>
+
+                    <div class="battery-display js-battery-display" data-battery="2">
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment battery-segment--large"></div>
+                    </div>
+
+                    <p class="battery-voltage">
+                        <span class="js-battery-2-voltage">--</span> V
+                    </p>
+                </article>
+            </div>
+        </section>
+    </main>
+
+</body>
+
+</html>
